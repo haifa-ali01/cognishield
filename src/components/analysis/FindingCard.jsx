@@ -9,8 +9,25 @@ import {
 
 export function FindingCard({ finding, expanded, onToggle, index }) {
   const metaColor = `var(--${finding.severity})`;
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onToggle();
+    }
+  };
+
   return (
-    <div className="csa-finding" style={{ '--sev-color': metaColor }} onClick={onToggle}>
+    <div
+      className="csa-finding"
+      style={{ '--sev-color': metaColor }}
+      onClick={onToggle}
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      aria-controls={`finding-details-${finding.id}`}
+    >
       <div className="csa-finding-head">
         <span className="csa-finding-index csa-mono">{String(index + 1).padStart(2, '0')}</span>
         <div className="csa-finding-bar" />
@@ -28,7 +45,7 @@ export function FindingCard({ finding, expanded, onToggle, index }) {
       </div>
 
       {expanded && (
-        <div className="csa-finding-body">
+        <div id={`finding-details-${finding.id}`} className="csa-finding-body">
           {finding.sourceLine ? (
             <div className="csa-finding-section">
               <div className="csa-finding-label">

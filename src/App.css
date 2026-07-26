@@ -211,6 +211,18 @@ body {
   }
 }
 
+.csa-screen-reader-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .csa-panel {
   background: var(--bg-surface);
   border: 1px solid var(--border-hair);
@@ -252,6 +264,16 @@ body {
   cursor: pointer;
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   transition: all 0.15s ease;
+}
+
+.csa-lang-btn:focus-visible,
+.csa-sample-btn:focus-visible,
+.csa-btn-primary:focus-visible,
+.csa-btn-ghost:focus-visible,
+.csa-finding:focus-visible,
+.csa-textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .csa-lang-btn.active {

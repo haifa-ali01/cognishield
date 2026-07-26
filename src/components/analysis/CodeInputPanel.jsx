@@ -17,12 +17,14 @@ export function CodeInputPanel({
       <div className="csa-panel-label">
         <Radar size={13} /> Source input
       </div>
-
-      <div className="csa-lang-toggle">
+ 
+      <div className="csa-lang-toggle" role="group" aria-label="Select source language">
         <button
           type="button"
           className={`csa-lang-btn ${language === 'javascript' ? 'active' : ''}`}
           onClick={() => onLanguageChange('javascript')}
+          aria-pressed={language === 'javascript'}
+          aria-label="Use JavaScript input"
         >
           JavaScript
         </button>
@@ -30,17 +32,25 @@ export function CodeInputPanel({
           type="button"
           className={`csa-lang-btn ${language === 'python' ? 'active' : ''}`}
           onClick={() => onLanguageChange('python')}
+          aria-pressed={language === 'python'}
+          aria-label="Use Python input"
         >
           Python
         </button>
       </div>
-
+ 
+      <label htmlFor="code-input" className="csa-screen-reader-only">
+        Paste code to analyze
+      </label>
       <textarea
+        id="code-input"
         className="csa-textarea csa-mono"
         placeholder={`Paste ${language === 'javascript' ? 'JavaScript' : 'Python'} code here…`}
         value={code}
         onChange={(e) => onCodeChange(e.target.value)}
         spellCheck={false}
+        aria-label="Code input editor"
+        aria-describedby={error ? 'code-input-error' : undefined}
       />
 
       <div className="csa-samples">
@@ -57,7 +67,7 @@ export function CodeInputPanel({
       </div>
 
       {error && (
-        <div className="csa-error">
+        <div id="code-input-error" className="csa-error" role="alert" aria-live="assertive">
           <AlertTriangle size={14} style={{ marginTop: 1, flexShrink: 0 }} />
           <span>{error}</span>
         </div>

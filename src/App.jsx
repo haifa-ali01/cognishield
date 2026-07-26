@@ -5,6 +5,117 @@ import { ResultsPanel } from './components/analysis/ResultsPanel';
 import { SAMPLES, STAGES, calcScore, detectVulnerabilities } from './data/vulnerabilityData';
 import './App.css';
 
+const MAX_CODE_LENGTH = 20000;
+
+const sanitizeCodeInput = (value = '') => {
+  const normalized = value.replace(/\r\n?/g, '\n');
+
+  return Array.from(normalized)
+    .filter((char) => {
+      const code = char.charCodeAt(0);
+      return code === 9 || code === 10 || code >= 32;
+    })
+    .join('');
+};
+
+const JS_LANGUAGE_MARKERS = [
+  /\bconst\b/,
+  /\blet\b/,
+  /\bvar\b/,
+  /\bfunction\b/,
+  /=>/,
+  /\brequire\s*\(/,
+  /\bconsole\./,
+  /\bdocument\./,
+  /\bwindow\./,
+  /\bmodule\.exports\b/,
+  /\bprocess\./,
+  /\bMath\./,
+];
+
+const PYTHON_LANGUAGE_MARKERS = [
+  /\bdef\b/,
+  /\bfrom\b/,
+  /\bprint\s*\(/,
+  /\blambda\b/,
+  /\bself\b/,
+  /\basync def\b/,
+  /\bawait\b/,
+  /\bTrue\b/,
+  /\bFalse\b/,
+  /\bNone\b/,
+  /\brequest\./,
+  /\bos\./,
+  /\b@app\./,
+];
+
+const validateCodeForLanguage = (snippet, selectedLanguage) => {
+  const normalizedSnippet = sanitizeCodeInput(snippet);
+  const trimmed = normalizedSnippet.trim();
+  if (!trimmed) {
+    return {
+      valid: false,
+      error: 'Paste some code before running an analysis — there is nothing to scan yet.',
+    };
+  }
+
+  if (normalizedSnippet.length > MAX_CODE_LENGTH) {
+    return {
+      valid: false,
+      error: `The pasted input is too long. Keep snippets under ${MAX_CODE_LENGTH.toLocaleString()} characters for a safe scan.`,
+    };
+  }
+
+  if (trimmed.length < 20) {
+    return {
+      valid: false,
+      error:
+        selectedLanguage === 'javascript'
+          ? 'The pasted input does not look like JavaScript code. Please paste a complete JavaScript snippet and make sure the selected language matches it.'
+          : 'The pasted input does not look like Python code. Please paste a complete Python snippet and make sure the selected language matches it.',
+    };
+  }
+
+  const hasJavaScriptSignals = JS_LANGUAGE_MARKERS.some((pattern) => pattern.test(trimmed));
+  const hasPythonSignals = PYTHON_LANGUAGE_MARKERS.some((pattern) => pattern.test(trimmed));
+
+  if (selectedLanguage === 'javascript') {
+    if (hasPythonSignals && !hasJavaScriptSignals) {
+      return {
+        valid: false,
+        error: 'The pasted input looks like Python code. Switch to Python or paste JavaScript code.',
+      };
+    }
+
+    if (!hasJavaScriptSignals && !hasPythonSignals) {
+      return {
+        valid: false,
+        error:
+          'The pasted input does not look like JavaScript code. Please paste a complete JavaScript snippet and make sure the selected language matches it.',
+      };
+    }
+  }
+
+  if (selectedLanguage === 'python') {
+    if (hasJavaScriptSignals && !hasPythonSignals) {
+      return {
+        valid: false,
+        error: 'The pasted input looks like JavaScript code. Switch to JavaScript or paste Python code.',
+      };
+    }
+
+    if (!hasJavaScriptSignals && !hasPythonSignals) {
+      return {
+        valid: false,
+        error:
+          'The pasted input does not look like Python code. Please paste a complete Python snippet and make sure the selected language matches it.',
+      };
+    }
+  }
+
+  return { valid: true, error: null };
+};
+
 function App() {
   const [language, setLanguage] = useState('javascript');
   const [code, setCode] = useState('');
@@ -20,21 +131,6 @@ function App() {
     timers.current = [];
   };
 
-  const isCodeLikelyValid = (snippet, languageOption) => {
-    const trimmed = snippet.trim();
-    if (trimmed.length < 20) {
-      return false;
-    }
-
-    const validators = {
-      javascript: /\b(const|let|var|function|class|=>|import|export|require|console|document|Math|process)\b/,
-      python: /\b(def|class|import|from|print|lambda|async|await|self)\b/,
-    };
-
-    const pattern = validators[languageOption];
-    return pattern.test(trimmed) || trimmed.length > 80;
-  };
-
   useEffect(() => {
     return () => {
       clearTimers();
@@ -42,25 +138,22 @@ function App() {
   }, []);
 
   const handleAnalyze = () => {
-    const trimmedCode = code.trim();
-    if (!trimmedCode) {
-      setError("Paste some code before running an analysis — there's nothing to scan yet.");
-      return;
-    }
+    const sanitizedCode = sanitizeCodeInput(code);
+    const validation = validateCodeForLanguage(sanitizedCode, language);
 
-    if (!isCodeLikelyValid(trimmedCode, language)) {
-      setError(
-        `The pasted input does not look like ${language === 'javascript' ? 'JavaScript' : 'Python'} code. ` +
-          'Please paste a complete code snippet and make sure the selected language matches it.'
-      );
+    clearTimers();
+    setStageIndex(0);
+    setExpandedId(null);
+    setFindings([]);
+
+    if (!validation.valid) {
+      setError(validation.error);
+      setStatus('idle');
       return;
     }
 
     setError(null);
-    clearTimers();
     setStatus('analyzing');
-    setStageIndex(0);
-    setExpandedId(null);
 
     STAGES.forEach((_, index) => {
       const stageTimer = setTimeout(() => setStageIndex(index), index * 480);
@@ -69,7 +162,7 @@ function App() {
 
     const completeTimer = setTimeout(() => {
       try {
-        const results = detectVulnerabilities(code, language);
+        const results = detectVulnerabilities(sanitizedCode, language);
         setFindings(results);
         setStatus('complete');
       } catch {
@@ -87,6 +180,13 @@ function App() {
     setFindings([]);
     setError(null);
     setExpandedId(null);
+    setStageIndex(0);
+    setCode('');
+  };
+
+  const handleCodeChange = (nextValue) => {
+    const sanitizedValue = sanitizeCodeInput(nextValue);
+    setCode(sanitizedValue.length > MAX_CODE_LENGTH ? sanitizedValue.slice(0, MAX_CODE_LENGTH) : sanitizedValue);
   };
 
   const loadSample = (key) => {
@@ -95,7 +195,7 @@ function App() {
 
     clearTimers();
     setLanguage(sample.language);
-    setCode(sample.code);
+    setCode(sanitizeCodeInput(sample.code));
     setStatus('idle');
     setFindings([]);
     setError(null);
@@ -123,7 +223,7 @@ function App() {
             </div>
           </div>
 
-          <div className="csa-status-pill">
+          <div className="csa-status-pill" role="status" aria-live="polite">
             <span className="csa-status-dot" />
             {status === 'analyzing'
               ? 'Scanning…'
@@ -138,7 +238,7 @@ function App() {
             language={language}
             code={code}
             onLanguageChange={setLanguage}
-            onCodeChange={setCode}
+            onCodeChange={handleCodeChange}
             onLoadSample={loadSample}
             onAnalyze={handleAnalyze}
             onReset={handleReset}
